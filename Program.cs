@@ -1,13 +1,7 @@
-﻿using OpenCvSharp;
+﻿using ExtensionMethods;
 
-// Load the image Michelangelo_ThecreationofAdam_1707x775.jpg with the standard file library
-Mat img = new Mat("Resources\\Michelangelo_ThecreationofAdam_1707x775.jpg", ImreadModes.Color);
+using OpenCvSharp;
 
-// Create a window
-Cv2.NamedWindow("Michelangelo_ThecreationofAdam_1707x775", WindowFlags.AutoSize);
+using OpenCVTest;
 
-// Show the image
-Cv2.ImShow("Michelangelo_ThecreationofAdam_1707x775", img);
-
-// Wait for key press
-Cv2.WaitKey(0);
+Utils.PrintScore("solution.txt");
