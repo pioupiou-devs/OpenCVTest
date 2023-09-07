@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 using ExtensionMethods;
+
+using OpenCvSharp;
+using OpenCvSharp.Extensions;
 
 namespace OpenCVTest
 {
@@ -14,10 +18,18 @@ namespace OpenCVTest
         private const float deltaY = 1.0f; // px
         private const float deltaAngle = 1.0f; // deg
 
-        private static List<Fragment> ExtractFragment(string filePath)
+        public static Mat LoadImage(string filepath)
+        {
+            if (Bitmap.FromFile(@"Resources\frag_eroded\frag_eroded_0.png") is not Bitmap bitmap)
+                throw new Exception($"Failed to load image {filepath}");
+
+            return BitmapConverter.ToMat(bitmap);
+        }
+
+        private static List<Fragment> ExtractFragments(string folderPath)
         {
             List<Fragment> fragments = new();
-            using (StreamReader sr = new(filePath))
+            using (StreamReader sr = new(folderPath))
             {
                 string? line;
                 while ((line = sr.ReadLine()) != null)
@@ -63,8 +75,8 @@ namespace OpenCVTest
         public static void PrintScore(string proposedSolutionPath)
         {
             // Load the fragment files
-            List<Fragment> solution = Utils.ExtractFragment("Resources\\fragments.txt");
-            List<Fragment> proposedSolution = Utils.ExtractFragment($"Resources\\{proposedSolutionPath}");
+            List<Fragment> solution = Utils.ExtractFragments("Resources\\fragments.txt");
+            List<Fragment> proposedSolution = Utils.ExtractFragments($"Resources\\{proposedSolutionPath}");
 
             float maxFragmentScore = 3.0f;
             float maxScore = maxFragmentScore * solution.Count;
