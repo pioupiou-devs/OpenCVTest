@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using ExtensionMethods;
@@ -18,38 +19,61 @@ namespace OpenCVTest
         private const float deltaY = 1.0f; // px
         private const float deltaAngle = 1.0f; // deg
 
-        public static Mat LoadImage(string filepath)
-        {
-            if (Bitmap.FromFile(@"Resources\frag_eroded\frag_eroded_0.png") is not Bitmap bitmap)
-                throw new Exception($"Failed to load image {filepath}");
+        public static Mat LoadImage(string filepath) =>
+            Cv2.ImDecode(File.ReadAllBytes(filepath), ImreadModes.Unchanged);
 
-            return BitmapConverter.ToMat(bitmap);
-        }
+        /// <summary>
+        /// Create a list of fragment from files
+        /// </summary>
+        /// <param name="folderPath">Path to the folder or file depending of isText</param>
+        /// <param name="isText">define if is a text file or a folder of png files</param>
+        /// <returns>list of fragments potentially not completed</returns>
+        public static List<Fragment> ExtractFragments(string folderPath, bool isText = false) =>
+            isText ?
+            ExtractFromTextFile(folderPath) :
+            ExtractFromPngFile(folderPath);
 
-        private static List<Fragment> ExtractFragments(string folderPath)
+        private static List<Fragment> ExtractFromTextFile(string folderPath)
         {
             List<Fragment> fragments = new();
-            using (StreamReader sr = new(folderPath))
+            using StreamReader sr = new(folderPath);
+            string? line;
+            while ((line = sr.ReadLine()) != null)
             {
-                string? line;
-                while ((line = sr.ReadLine()) != null)
-                {
-                    string[] tokens = line?
-                        .Split(' ')
-                        .Select(t => t.Replace(".", ","))
-                        .ToArray()
-                        ?? Array.Empty<string>();
+                string[] tokens = line?
+                    .Split(' ')
+                    .Select(t => t.Replace(".", ","))
+                    .ToArray()
+                    ?? Array.Empty<string>();
 
-                    if (tokens.Length != 4)
-                        throw new Exception("Invalid file format");
+                if (tokens.Length != 4)
+                    throw new Exception("Invalid file format");
 
-                    int number = int.Parse(tokens[0]);
-                    float x = float.Parse(tokens[1]);
-                    float y = float.Parse(tokens[2]);
-                    float angle = float.Parse(tokens[3]);
+                int number = int.Parse(tokens[0]);
+                float x = float.Parse(tokens[1]);
+                float y = float.Parse(tokens[2]);
+                float angle = float.Parse(tokens[3]);
 
-                    fragments.Add(new Fragment(number, x, y, angle));
-                }
+                fragments.Add(new Fragment(number, x, y, angle));
+            }
+            return fragments;
+        }
+
+        private static List<Fragment> ExtractFromPngFile(string folderPath)
+        {
+            List<Fragment> fragments = new();
+            // loop over all files in the folder frag_eroded
+            foreach (string file in Directory.EnumerateFiles(folderPath))
+            {
+                if (!Regex.IsMatch(file, "frag_eroded_[0-9]*\\.png$"))
+                    continue;
+
+                // Extract the number from the file paht with regex
+                int imgNumber = int.Parse(Regex.Match(file, "[0-9]+").Value);
+
+                // Load Image
+                Mat frag = Utils.LoadImage(file);
+                fragments.Add(new Fragment(imgNumber, image: frag));
             }
             return fragments;
         }
@@ -71,12 +95,16 @@ namespace OpenCVTest
             }
             return score;
         }
-
+        public static Tuple<int, int> GetSizeFromImage(string filepath)
+        {
+            OpenCvSharp.Size size = Cv2.ImRead(filepath, ImreadModes.Unchanged).Size();
+            return new Tuple<int, int>(size.Width, size.Height);
+        }
         public static void PrintScore(string proposedSolutionPath)
         {
             // Load the fragment files
-            List<Fragment> solution = Utils.ExtractFragments("Resources\\fragments.txt");
-            List<Fragment> proposedSolution = Utils.ExtractFragments($"Resources\\{proposedSolutionPath}");
+            List<Fragment> solution = Utils.ExtractFragments("Resources\\fragments.txt", true);
+            List<Fragment> proposedSolution = Utils.ExtractFragments($"Resources\\{proposedSolutionPath}", true);
 
             float maxFragmentScore = 3.0f;
             float maxScore = maxFragmentScore * solution.Count;

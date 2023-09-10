@@ -1,48 +1,55 @@
 ﻿
+using System.Text.RegularExpressions;
+
 using OpenCvSharp;
 
 using OpenCVTest;
 
-using System.Globalization;
+Scalar WHITE = new(255, 255, 255);
+Scalar BLACK = new(0, 0, 0);
 
-var FRAGMENTS = new List<Fragment>();
+List<Fragment> fragmentList = Utils.ExtractFragments(@"Resources\fragments.txt", true);
+List<Fragment> imageList = Utils.ExtractFragments(@"Resources\frag_eroded");
 
-// Read file
-foreach (var line in File.ReadLines("Resources\\fragments.txt"))
-{
-    string[] values = line.Split(new char[] { ' ' });
-    Fragment f = new Fragment(
-        int.Parse(values[0]),
-        int.Parse(values[1]),
-        int.Parse(values[2]),
-        float.Parse(values[3], CultureInfo.InvariantCulture) // Precise the use of a dot instead of a comma
-    );
-    FRAGMENTS.Add(f);
-}
+int width, height;
+(width, height) = Utils.GetSizeFromImage(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg");
 
 // White background
-Mat BG = new Mat(775, 1707, MatType.CV_32FC4);
-BG.Rectangle(new Rect(0, 0, 1707, 775), new Scalar(255, 255, 255, 255), -1);
+Mat background = new(height, width, MatType.CV_8UC3, WHITE);
 
-Utils.PrintScore("solution.txt");
+// Filter fragment with fragment_s.txt
+List<int> fragmentToDelete = File.ReadAllLines(@"Resources\fragments_s.txt")
+    .Select(l => int.Parse(l.Trim()))
+    .ToList();
+imageList.RemoveAll(f => fragmentToDelete.Contains(f.Number));
 
-// Load Image
-Mat img = Utils.LoadImage(@"Resources\frag_eroded\frag_eroded_0.png");
+// Combine fragment list and image list by number
+foreach (var fragment in fragmentList)
+{
+    Fragment? image = imageList.Find(f => f.Number == fragment.Number);
+    if (image is not null)
+        fragment.Image = image?.Image;
+}
+fragmentList.RemoveAll(f => f.Image is null);
 
-// Fuse pics
-Mat fusion = new Mat();
-//int x_offset = 50;
-//int y_offset = 50;
-//BG[y_offset: y_offset + img.Width, x_offset: x_offset + img.Height] = img;
-// ^ en mode shlag où on attaque la matrice, idk how to translate it in proper c#
-BG.AdjustROI((int)FRAGMENTS[0].X, (int)FRAGMENTS[0].X + img.Height, (int)FRAGMENTS[0].Y, (int)FRAGMENTS[0].Y + img.Width);
-img.CopyTo(BG);
+// Draw fragment on background
+foreach (var fragment in fragmentList)
+{
+    Mat? image = fragment.Image;
+    if (image is null)
+        continue;
 
-// Create a window
-Cv2.NamedWindow("A", WindowFlags.AutoSize);
+    Mat translated = image.Clone();
 
-// Show the image
-Cv2.ImShow("A", BG);
+    // Rotate and translate image
+    Cv2.WarpAffine(image, translated, Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0), image.Size());
 
-// Wait for key press
+    Console.WriteLine($"Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Frag [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
+
+    // Add image to background
+    translated.CopyTo(background[new Rect((int)fragment.X, (int)fragment.Y, translated.Width, translated.Height)]);
+
+}
+
+Cv2.ImShow("Background", background);
 Cv2.WaitKey(0);
