@@ -48,13 +48,16 @@ foreach (Fragment fragment in fragmentList)
     Rect rect = new((int)fragment.X - translated.Width / 2, (int)fragment.Y - translated.Height / 2, translated.Width, translated.Height);
     if (rect.X < 0 || rect.Y < 0 || rect.X + rect.Width > background.Width || rect.Y + rect.Height > background.Height)
         continue;
-    var temp = background[rect];
-    Mat dst = new Mat();
-    Cv2.AddWeighted(temp, 0.0, translated, 1.0, 0.0, dst);
+    Mat window = background[rect];
+    Mat dst = new();
+    Cv2.AddWeighted(window, 0.0, translated, 1.0, 0.0, dst);
 
-    background[rect] = dst;
+    // Get the alpha channel from translated
+    Mat alpha = new();
+    Cv2.ExtractChannel(translated, alpha, 3);
 
-
+    // Apply dst with alpha channel to background
+    dst.CopyTo(window, alpha);
 }
 
 Cv2.ImShow("Background", background);
