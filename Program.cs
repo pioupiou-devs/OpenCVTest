@@ -42,22 +42,50 @@ foreach (Fragment fragment in fragmentList)
     // Rotate and translate image
     Cv2.WarpAffine(image, translated, Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0), image.Size());
 
-    Console.WriteLine($"Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Frag [{fragment.X}->{fragment.X + translated.Width / 2}, {fragment.Y}->{fragment.Y + translated.Height / 2}]\n");
-
-    // Add image to background
-    Rect rect = new((int)fragment.X - translated.Width / 2, (int)fragment.Y - translated.Height / 2, translated.Width, translated.Height);
-    if (rect.X < 0 || rect.Y < 0 || rect.X + rect.Width > background.Width || rect.Y + rect.Height > background.Height)
-        continue;
-    Mat window = background[rect];
-    Mat dst = new();
-    Cv2.AddWeighted(window, 0.0, translated, 1.0, 0.0, dst);
-
     // Get the alpha channel from translated
     Mat alpha = new();
     Cv2.ExtractChannel(translated, alpha, 3);
 
-    // Apply dst with alpha channel to background
-    dst.CopyTo(window, alpha);
+
+
+    // Calculate the window
+    Rect window = new((int)fragment.X - translated.Width / 2, (int)fragment.Y - translated.Height / 2, translated.Width, translated.Height);
+
+    if (window.X < 0 || window.Y < 0 || window.X + window.Width > background.Width || window.Y + window.Height > background.Height)
+    {
+        Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
+
+        // Crop the translated image to fit the background
+        Rect crop = new(0,0,translated.Width,translated.Height);
+
+        if (window.X < 0)
+        {
+            crop.Width = window.X;
+        }
+        else if (window.X + translated.Width > background.Width)
+        {
+            crop.Width = background.Width - (window.X + translated.Width);
+        }
+        else if (window.Y < 0)
+        {
+            crop.Height = window.Y;
+        }
+        else if (window.Y + translated.Height > background.Height)
+        {
+            crop.Height = background.Height - (window.Y + translated.Height);
+        }
+
+        crop.Width = Math.Abs(crop.Width);
+        crop.Height = Math.Abs(crop.Height);
+
+        translated = translated[crop];
+        alpha = alpha[crop];
+        
+        Console.WriteLine($"2/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n by crop [{crop.X}->{crop.Width},{crop.Y}->{crop.Height}]");
+    }
+
+    // Apply dst with alpha channel to background and ignore the out of bounds pixels
+    translated.CopyTo(background[window], alpha);
 }
 
 Cv2.ImShow("Background", background);
