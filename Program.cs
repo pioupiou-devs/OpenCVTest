@@ -49,43 +49,73 @@ foreach (Fragment fragment in fragmentList)
 
 
     // Calculate the window
-    Rect window = new((int)fragment.X - translated.Width / 2, (int)fragment.Y - translated.Height / 2, translated.Width, translated.Height);
+    Rect window = new(new Point(fragment.X, fragment.Y), new Size(translated.Width, translated.Height));
 
-    if (window.X < 0 || window.Y < 0 || window.X + window.Width > background.Width || window.Y + window.Height > background.Height)
+    Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
+
+    Rect newWindow = new Rect(0, 0, translated.Width, translated.Height);
+    bool modified = false;
+    if (window.X <= 0)
     {
-        Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
-
-        // Crop the translated image to fit the background
-        Rect crop = new(0,0,translated.Width,translated.Height);
-
-        if (window.X < 0)
-        {
-            crop.Width = window.X;
-        }
-        else if (window.X + translated.Width > background.Width)
-        {
-            crop.Width = background.Width - (window.X + translated.Width);
-        }
-        else if (window.Y < 0)
-        {
-            crop.Height = window.Y;
-        }
-        else if (window.Y + translated.Height > background.Height)
-        {
-            crop.Height = background.Height - (window.Y + translated.Height);
-        }
-
-        crop.Width = Math.Abs(crop.Width);
-        crop.Height = Math.Abs(crop.Height);
-
-        translated = translated[crop];
-        alpha = alpha[crop];
-        
-        Console.WriteLine($"2/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n by crop [{crop.X}->{crop.Width},{crop.Y}->{crop.Height}]");
+        newWindow.X = window.X;
+        window.X = 0;
+        modified = true;
     }
 
+    if (window.Width + window.X >= background.Width)
+    {
+        int delta = background.Width - window.Width;
+        if (delta <= background.Width / 2)
+        {
+            window.Width -= delta / 2;
+            window.X += delta / 2;
+        }
+        else
+            window.Width -= delta;
+        
+        newWindow.Width = window.Width;
+        newWindow.X = window.X;
+        modified = true;
+    }
+
+    if (window.Y <= 0)
+    {
+        newWindow.Y = window.Y;
+        window.Y = 0;
+        modified = true;
+    }
+    if ((window.Height + window.Y >= background.Height))
+    {
+        int delta = background.Height - window.Height;
+
+        if (delta <= background.Height / 2)
+        {
+            window.Height -= delta / 2;
+            window.Y += delta / 2;
+        }
+        else
+            window.Height -= delta;
+
+        newWindow.Height = window.Height;
+        newWindow.Y = window.Y;
+
+        modified = true;
+    }
+
+    if (modified)
+    {
+        Cv2.ImShow("before", translated);
+        translated = translated[newWindow];
+        alpha = alpha[newWindow];
+        Cv2.ImShow("after", translated);
+        Cv2.WaitKey(0);
+
+        Console.WriteLine($"\tWindows : [{window.X},{window.Y};{window.Width + window.X},{window.Height + window.Y}]");
+        Console.WriteLine($"\tBackground : [0,0;{background.Width},{background.Height}]");
+    }
     // Apply dst with alpha channel to background and ignore the out of bounds pixels
-    translated.CopyTo(background[window], alpha);
+    var temp = background[window];
+    translated.CopyTo(temp, alpha);
 }
 
 Cv2.ImShow("Background", background);
