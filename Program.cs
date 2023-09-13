@@ -30,6 +30,7 @@ foreach (Fragment frag in fragmentList)
 }
 fragmentList.RemoveAll(f => f.Image is null);
 
+int count = 10;
 // Draw fragment on background
 foreach (Fragment fragment in fragmentList)
 {
@@ -42,80 +43,28 @@ foreach (Fragment fragment in fragmentList)
     // Rotate and translate image
     Cv2.WarpAffine(image, translated, Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0), image.Size());
 
+    // TODO : Find how to re-center after rotation
+
     // Get the alpha channel from translated
     Mat alpha = new();
     Cv2.ExtractChannel(translated, alpha, 3);
 
-
-
     // Calculate the window
     Rect window = new(new Point(fragment.X, fragment.Y), new Size(translated.Width, translated.Height));
-
-    Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
-
-    Rect newWindow = new Rect(0, 0, translated.Width, translated.Height);
-    bool modified = false;
-    if (window.X <= 0)
+    try
     {
-        newWindow.X = window.X;
-        window.X = 0;
-        modified = true;
+        // Apply translated with alpha channel to background
+        var temp = background[window];
+        translated.CopyTo(temp, alpha);
     }
-
-    if (window.Width + window.X >= background.Width)
+    catch (Exception e)
     {
-        int delta = background.Width - window.Width;
-        if (delta <= background.Width / 2)
-        {
-            window.Width -= delta / 2;
-            window.X += delta / 2;
-        }
-        else
-            window.Width -= delta;
-        
-        newWindow.Width = window.Width;
-        newWindow.X = window.X;
-        modified = true;
+        // TODO : Find how to apply a fragment where his transparant part is out of bounds
+        // TODO : For the rest, find why they're not included with the window defined line 53
+
+        Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
+        continue;
     }
-
-    if (window.Y <= 0)
-    {
-        newWindow.Y = window.Y;
-        window.Y = 0;
-        modified = true;
-    }
-    if ((window.Height + window.Y >= background.Height))
-    {
-        int delta = background.Height - window.Height;
-
-        if (delta <= background.Height / 2)
-        {
-            window.Height -= delta / 2;
-            window.Y += delta / 2;
-        }
-        else
-            window.Height -= delta;
-
-        newWindow.Height = window.Height;
-        newWindow.Y = window.Y;
-
-        modified = true;
-    }
-
-    if (modified)
-    {
-        Cv2.ImShow("before", translated);
-        translated = translated[newWindow];
-        alpha = alpha[newWindow];
-        Cv2.ImShow("after", translated);
-        Cv2.WaitKey(0);
-
-        Console.WriteLine($"\tWindows : [{window.X},{window.Y};{window.Width + window.X},{window.Height + window.Y}]");
-        Console.WriteLine($"\tBackground : [0,0;{background.Width},{background.Height}]");
-    }
-    // Apply dst with alpha channel to background and ignore the out of bounds pixels
-    var temp = background[window];
-    translated.CopyTo(temp, alpha);
 }
 
 Cv2.ImShow("Background", background);
