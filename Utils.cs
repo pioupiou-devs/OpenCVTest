@@ -11,6 +11,8 @@ using ExtensionMethods;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 
+using Point = OpenCvSharp.Point;
+
 namespace OpenCVTest
 {
     public static class Utils
@@ -116,6 +118,48 @@ namespace OpenCVTest
             float meanScore = score / solution.Count;
 
             Console.WriteLine($"Score = {score.ToPercentage(maxScore)}%, Mean score = {meanScore.ToPercentage(maxFragmentScore)}%");
+
         }
+
+        public static void PrintImage(string name, Mat image)
+        {
+            try
+            {
+                // Show image
+                _ = new Window(name, WindowFlags.GuiExpanded);
+                Cv2.ImShow(name, image);
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Error while printing image");
+            }
+        }
+
+        public static void PrintMat(string name, Mat mat)
+        {
+            try
+            {
+                Console.WriteLine($"{name} = ");
+                for (int i = 0; i < mat.Rows; i++)
+                {
+                    string txt = "";
+                    for (int j = 0; j < mat.Cols; j++)
+                    {
+                        var pixel = mat.At<byte>(i, j);
+
+                        if (pixel > 0)
+                        {
+                            txt += pixel + " ";
+                        }
+                    }
+                    Console.WriteLine($"[{txt}]");
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Error while printing mat");
+            }
+        }
+
     }
 }
