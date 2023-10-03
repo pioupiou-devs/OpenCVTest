@@ -1,12 +1,8 @@
-﻿
-using System.Security.Principal;
-
-using OpenCvSharp;
+﻿using OpenCvSharp;
 
 using OpenCVTest;
 
-Scalar WHITE = new(255, 255, 255);
-Scalar BLACK = new(0, 0, 0);
+Scalar BACKGROUND_COLOR = new(255, 255, 255);
 
 List<Fragment> fragmentList = Utils.ExtractFragments(@"Resources\fragments.txt", true);
 List<Fragment> imageList = Utils.ExtractFragments(@"Resources\frag_eroded");
@@ -15,8 +11,23 @@ int width, height;
 (width, height) = Utils.GetSizeFromImage(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg");
 var realImage = Cv2.ImRead(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg", ImreadModes.Unchanged);
 
+int deltaW = 200, deltaH = 200, deltaX = 200, deltaY = 200;
+
 // White background
-Mat background = new(height, width, MatType.CV_8UC4, WHITE);
+Mat background = new(height + (deltaY + deltaH), width + (deltaX + deltaW), MatType.CV_8UC4, BACKGROUND_COLOR);
+
+// Add realImage to background at position (deltaX, deltaY) with alpha  30%
+Mat realImageAlpha = new();
+Cv2.CvtColor(realImage, realImageAlpha, ColorConversionCodes.BGRA2RGBA);
+Mat alphaN = new();
+Cv2.ExtractChannel(realImageAlpha, alphaN, 3);
+Mat tempImage = background[new Rect(new Point(deltaX, deltaY), realImage.Size())];
+Cv2.AddWeighted(tempImage, 0.7, realImageAlpha, 0.3, 0, tempImage);
+realImageAlpha.CopyTo(tempImage, alphaN);
+
+
+Cv2.ImShow("Background", background);
+Cv2.WaitKey(0);
 
 Console.WriteLine($"Fragment list count = {fragmentList.Count}, Image list count = {imageList.Count}");
 
@@ -31,21 +42,15 @@ fragmentList.RemoveAll(f => f.Image is null);
 
 int count = 0;
 // Draw fragment on background
-foreach (Fragment fragment in fragmentList)//new List<Fragment> (){fragmentList.FirstOrDefault()}) //TODO : Remove FirstOrDefault
+foreach (Fragment fragment in fragmentList)
 {
     Mat? image = fragment.Image;
-    if (image is null)
-        continue;
 
-    Mat translated = image.Clone();
+    Mat translated = image?.Clone();
 
     // Rotate and translate image
-    Mat rotationMatrix = Cv2.GetRotationMatrix2D(new Point2f(image.Width/2, image.Height / 2), fragment.Angle, 1.0);
+    Mat rotationMatrix = Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0);
     Cv2.WarpAffine(image, translated, rotationMatrix, image.Size());
-    //Utils.PrintImage(nameof(image), image);
-    ////Utils.PrintMat(nameof(rotationMatrix), rotationMatrix);
-    //Utils.PrintImage(nameof(translated), translated);
-    //Cv2.WaitKey(0);
 
     // Get the alpha channel from translated
     Mat alpha = new();
@@ -53,7 +58,7 @@ foreach (Fragment fragment in fragmentList)//new List<Fragment> (){fragmentList.
 
     // Calculate the window
     Rect window = new(
-        new Point(fragment.X- (translated.Width / 2), fragment.Y - (translated.Height / 2)), 
+        new Point((fragment.X - (translated.Width / 2)) + deltaX, (fragment.Y - (translated.Height / 2)) + deltaY),
         new Size(translated.Width, translated.Height));
     var temp = null as Mat;
     try
@@ -65,14 +70,17 @@ foreach (Fragment fragment in fragmentList)//new List<Fragment> (){fragmentList.
     {
 
         Console.WriteLine($"error : {e.Message}, when working on fragment {fragment.Number}");
-        Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
         count++;
         continue;
     }
     translated.CopyTo(temp, alpha);
 }
 
-Console.WriteLine($"Count = {count}");
+// Crop the deltas
+Rect crop = new(deltaX, deltaY, width, height);
+background = background[crop];
+
+Console.WriteLine($"Count of error {count} on a total of {imageList.Count} fragments. The number of listed fragments is {fragmentList.Count}");
 
 Cv2.ImShow("Background", background);
 Cv2.WaitKey(0);
