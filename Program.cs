@@ -16,9 +16,13 @@ int deltaW = 200, deltaH = 200, deltaX = 200, deltaY = 200;
 // White background
 Mat background = new(height + (deltaY + deltaH), width + (deltaX + deltaW), MatType.CV_8UC4, BACKGROUND_COLOR);
 
-// Add realImage to background at position (deltaX, deltaY) with alpha  30%
+// Add greyscaled realImage to background at position (deltaX, deltaY) with alpha  30%
+Mat realImageGrey = new();
 Mat realImageAlpha = new();
-Cv2.CvtColor(realImage, realImageAlpha, ColorConversionCodes.BGRA2RGBA);
+
+Cv2.CvtColor(realImage, realImageGrey, ColorConversionCodes.BGRA2GRAY);
+Cv2.CvtColor(realImageGrey, realImageAlpha, ColorConversionCodes.BGR2BGRA);
+
 Mat alphaN = new();
 Cv2.ExtractChannel(realImageAlpha, alphaN, 3);
 Mat tempImage = background[new Rect(new Point(deltaX, deltaY), realImage.Size())];
