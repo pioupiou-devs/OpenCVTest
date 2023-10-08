@@ -17,10 +17,6 @@ namespace OpenCVTest
 {
     public static class Utils
     {
-        private const float deltaX = 1.0f; // px
-        private const float deltaY = 1.0f; // px
-        private const float deltaAngle = 1.0f; // deg
-
         public static Mat LoadImage(string filepath) =>
             Cv2.ImDecode(File.ReadAllBytes(filepath), ImreadModes.Unchanged);
 
@@ -80,47 +76,12 @@ namespace OpenCVTest
             return fragments;
         }
 
-        private static float EvaluateFragment(Fragment solution, Fragment proposedFragment)
-        {
-            float score = 0.0f;
-            if (Math.Abs(solution.X - proposedFragment.X) < deltaX)
-            {
-                score += 1.0f;
-            }
-            if (Math.Abs(solution.Y - proposedFragment.Y) < deltaY)
-            {
-                score += 1.0f;
-            }
-            if (Math.Abs(solution.Angle - proposedFragment.Angle) < deltaAngle)
-            {
-                score += 1.0f;
-            }
-            return score;
-        }
         public static Tuple<int, int> GetSizeFromImage(string filepath)
         {
             OpenCvSharp.Size size = Cv2.ImRead(filepath, ImreadModes.Unchanged).Size();
             return new Tuple<int, int>(size.Width, size.Height);
         }
-        public static void PrintScore(string proposedSolutionPath)
-        {
-            // Load the fragment files
-            List<Fragment> solution = Utils.ExtractFragments("Resources\\fragments.txt", true);
-            List<Fragment> proposedSolution = Utils.ExtractFragments($"Resources\\{proposedSolutionPath}", true);
-
-            float maxFragmentScore = 3.0f;
-            float maxScore = maxFragmentScore * solution.Count;
-            float score = 0.0f;
-
-            foreach (var (s, p) in solution.Zip(proposedSolution))
-                score += Utils.EvaluateFragment(s, p);
-
-            float meanScore = score / solution.Count;
-
-            Console.WriteLine($"Score = {score.ToPercentage(maxScore)}%, Mean score = {meanScore.ToPercentage(maxFragmentScore)}%");
-
-        }
-
+     
         public static void PrintImage(string name, Mat image)
         {
             try

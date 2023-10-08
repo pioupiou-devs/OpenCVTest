@@ -29,10 +29,6 @@ Mat tempImage = background[new Rect(new Point(deltaX, deltaY), realImage.Size())
 Cv2.AddWeighted(tempImage, 0.7, realImageAlpha, 0.3, 0, tempImage);
 realImageAlpha.CopyTo(tempImage, alphaN);
 
-
-Cv2.ImShow("Background", background);
-Cv2.WaitKey(0);
-
 Console.WriteLine($"Fragment list count = {fragmentList.Count}, Image list count = {imageList.Count}");
 
 // Combine fragment list and image list by number
@@ -85,6 +81,10 @@ Rect crop = new(deltaX, deltaY, width, height);
 background = background[crop];
 
 Console.WriteLine($"Count of error {count} on a total of {imageList.Count} fragments. The number of listed fragments is {fragmentList.Count}");
+
+// Evaluate the score
+Evaluator evaluator = new(1, 1, 1);
+evaluator.PrintScore(@"solution.txt");
 
 Cv2.ImShow("Background", background);
 Cv2.WaitKey(0);
