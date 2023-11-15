@@ -3,6 +3,9 @@ using OpenCvSharp;
 
 using OpenCVTest;
 
+Benchmarks.Test();
+
+/*
 Scalar WHITE = new(255, 255, 255);
 Scalar BLACK = new(0, 0, 0);
 
@@ -120,3 +123,4 @@ foreach (Fragment fragment in fragmentList)
 
 Cv2.ImShow("Background", background);
 Cv2.WaitKey(0);
+*/
