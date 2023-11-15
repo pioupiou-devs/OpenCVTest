@@ -1,5 +1,4 @@
-﻿
-using OpenCvSharp;
+﻿using OpenCvSharp;
 
 using OpenCVTest;
 
@@ -14,15 +13,27 @@ List<Fragment> imageList = Utils.ExtractFragments(@"Resources\frag_eroded");
 
 int width, height;
 (width, height) = Utils.GetSizeFromImage(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg");
+var realImage = Cv2.ImRead(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg", ImreadModes.Unchanged);
+
+int deltaW = 200, deltaH = 200, deltaX = 200, deltaY = 200;
 
 // White background
-Mat background = new(height, width, MatType.CV_8UC4, WHITE);
+Mat background = new(height + (deltaY + deltaH), width + (deltaX + deltaW), MatType.CV_8UC4, BACKGROUND_COLOR);
 
-// Filter fragment with fragment_s.txt
-List<int> fragmentToDelete = File.ReadAllLines(@"Resources\fragments_s.txt")
-    .Select(l => int.Parse(l.Trim()))
-    .ToList();
-imageList.RemoveAll(f => fragmentToDelete.Contains(f.Number));
+// Add greyscaled realImage to background at position (deltaX, deltaY) with alpha  30%
+Mat realImageGrey = new();
+Mat realImageAlpha = new();
+
+Cv2.CvtColor(realImage, realImageGrey, ColorConversionCodes.BGRA2GRAY);
+Cv2.CvtColor(realImageGrey, realImageAlpha, ColorConversionCodes.BGR2BGRA);
+
+Mat alphaN = new();
+Cv2.ExtractChannel(realImageAlpha, alphaN, 3);
+Mat tempImage = background[new Rect(new Point(deltaX, deltaY), realImage.Size())];
+Cv2.AddWeighted(tempImage, 0.7, realImageAlpha, 0.3, 0, tempImage);
+realImageAlpha.CopyTo(tempImage, alphaN);
+
+Console.WriteLine($"Fragment list count = {fragmentList.Count}, Image list count = {imageList.Count}");
 
 // Combine fragment list and image list by number
 foreach (Fragment frag in fragmentList)
@@ -33,93 +44,51 @@ foreach (Fragment frag in fragmentList)
 }
 fragmentList.RemoveAll(f => f.Image is null);
 
+int count = 0;
 // Draw fragment on background
 foreach (Fragment fragment in fragmentList)
 {
     Mat? image = fragment.Image;
-    if (image is null)
-        continue;
 
-    Mat translated = image.Clone();
+    Mat translated = image?.Clone();
 
     // Rotate and translate image
-    Cv2.WarpAffine(image, translated, Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0), image.Size());
+    Mat rotationMatrix = Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), fragment.Angle, 1.0);
+    Cv2.WarpAffine(image, translated, rotationMatrix, image.Size());
 
     // Get the alpha channel from translated
     Mat alpha = new();
     Cv2.ExtractChannel(translated, alpha, 3);
 
-
-
     // Calculate the window
-    Rect window = new(new Point(fragment.X, fragment.Y), new Size(translated.Width, translated.Height));
-
-    Console.WriteLine($"1/ Fragment {fragment.Number} at ({fragment.X}, {fragment.Y}) with angle {fragment.Angle}\n Background [{0}->{background.Width}, {0}->{background.Height}]\n Translated [{fragment.X}->{fragment.X + translated.Width}, {fragment.Y}->{fragment.Y + translated.Height}]\n");
-
-    Rect newWindow = new Rect(0, 0, translated.Width, translated.Height);
-    bool modified = false;
-    if (window.X <= 0)
+    Rect window = new(
+        new Point((fragment.X - (translated.Width / 2)) + deltaX, (fragment.Y - (translated.Height / 2)) + deltaY),
+        new Size(translated.Width, translated.Height));
+    var temp = null as Mat;
+    try
     {
-        newWindow.X = window.X;
-        window.X = 0;
-        modified = true;
+        // Apply translated with alpha channel to background
+        temp = background[window];
     }
-
-    if (window.Width + window.X >= background.Width)
+    catch (Exception e)
     {
-        int delta = background.Width - window.Width;
-        if (delta <= background.Width / 2)
-        {
-            window.Width -= delta / 2;
-            window.X += delta / 2;
-        }
-        else
-            window.Width -= delta;
-        
-        newWindow.Width = window.Width;
-        newWindow.X = window.X;
-        modified = true;
+
+        Console.WriteLine($"error : {e.Message}, when working on fragment {fragment.Number}");
+        count++;
+        continue;
     }
-
-    if (window.Y <= 0)
-    {
-        newWindow.Y = window.Y;
-        window.Y = 0;
-        modified = true;
-    }
-    if ((window.Height + window.Y >= background.Height))
-    {
-        int delta = background.Height - window.Height;
-
-        if (delta <= background.Height / 2)
-        {
-            window.Height -= delta / 2;
-            window.Y += delta / 2;
-        }
-        else
-            window.Height -= delta;
-
-        newWindow.Height = window.Height;
-        newWindow.Y = window.Y;
-
-        modified = true;
-    }
-
-    if (modified)
-    {
-        Cv2.ImShow("before", translated);
-        translated = translated[newWindow];
-        alpha = alpha[newWindow];
-        Cv2.ImShow("after", translated);
-        Cv2.WaitKey(0);
-
-        Console.WriteLine($"\tWindows : [{window.X},{window.Y};{window.Width + window.X},{window.Height + window.Y}]");
-        Console.WriteLine($"\tBackground : [0,0;{background.Width},{background.Height}]");
-    }
-    // Apply dst with alpha channel to background and ignore the out of bounds pixels
-    var temp = background[window];
     translated.CopyTo(temp, alpha);
 }
+
+// Crop the deltas
+Rect crop = new(deltaX, deltaY, width, height);
+background = background[crop];
+
+Console.WriteLine($"Count of error {count} on a total of {imageList.Count} fragments. The number of listed fragments is {fragmentList.Count}");
+
+// Evaluate the score
+Evaluator evaluator = new(1, 1, 1);
+evaluator.PrintScore(@"solution.txt");
 
 Cv2.ImShow("Background", background);
 Cv2.WaitKey(0);
