@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -18,6 +18,12 @@
 		<Content Include="Resources\**\*.*">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Folder Include="Resources\result\">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Folder>
 	</ItemGroup>
 
 </Project>

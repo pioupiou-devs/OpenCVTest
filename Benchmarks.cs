@@ -12,12 +12,22 @@ namespace OpenCVTest
 {
     public class Benchmarks
     {
+        public static string PATH_IMG_1 = @"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg";
+        public static string PATH_IMG_2 = @"Resources\frag_eroded\frag_eroded_24.png";
+        public static string PATH_RES = @"Resources\result\";
 
         public static void Test()
         {
             // Charger vos images ici
-            Mat image1 = new Mat("path/to/image1.jpg", ImreadModes.Color);
-            Mat image2 = new Mat("path/to/image2.jpg", ImreadModes.Color);
+            Mat image1 = new Mat(PATH_IMG_1, ImreadModes.Color);
+            Mat image2 = new Mat(PATH_IMG_2, ImreadModes.Color);
+
+            // Vérifier que les images sont chargées correctement
+            if (image1.Empty() || image2.Empty())
+            {
+                Console.WriteLine("Une ou plusieurs images n'ont pas été chargées correctement.");
+                return;
+            }
 
             // Initialiser les détecteurs
             var sift = SIFT.Create();
@@ -26,104 +36,75 @@ namespace OpenCVTest
             var akaze = AKAZE.Create();
             var brisk = BRISK.Create();
 
-            // Mesurer le temps d'exécution pour chaque détecteur
-            var stopwatch = new System.Diagnostics.Stopwatch();
-
-            // SIFT
-            stopwatch.Start();
-            var keypointsSift1 = sift.Detect(image1);
-            var keypointsSift2 = sift.Detect(image2);
-            var descriptorsSift1 = new Mat();
-            var descriptorsSift2 = new Mat();
-            sift.Compute(image1, ref keypointsSift1, descriptorsSift1);
-            sift.Compute(image2, ref keypointsSift2, descriptorsSift2);
-            var matcherSift = new BFMatcher(NormTypes.L2, false);
-            var matchesSift = matcherSift.Match(descriptorsSift1, descriptorsSift2);
-            stopwatch.Stop();
-            Console.WriteLine($"SIFT: {stopwatch.ElapsedMilliseconds} ms, Matches: {matchesSift.Length}");
-
-            // SURF
-            stopwatch.Restart();
-            var keypointsSurf1 = surf.Detect(image1);
-            var keypointsSurf2 = surf.Detect(image2);
-            var descriptorsSurf1 = new Mat();
-            var descriptorsSurf2 = new Mat();
-            surf.Compute(image1, ref keypointsSurf1, descriptorsSurf1);
-            surf.Compute(image2, ref keypointsSurf2, descriptorsSurf2);
-            var matcherSurf = new BFMatcher(NormTypes.L2, false);
-            var matchesSurf = matcherSurf.Match(descriptorsSurf1, descriptorsSurf2);
-            stopwatch.Stop();
-            Console.WriteLine($"SURF: {stopwatch.ElapsedMilliseconds} ms, Matches: {matchesSurf.Length}");
-
-            // ORB
-            stopwatch.Restart();
-            var keypointsOrb1 = orb.Detect(image1);
-            var keypointsOrb2 = orb.Detect(image2);
-            var descriptorsOrb1 = new Mat();
-            var descriptorsOrb2 = new Mat();
-            orb.Compute(image1, ref keypointsOrb1, descriptorsOrb1);
-            orb.Compute(image2, ref keypointsOrb2, descriptorsOrb2);
-            var matcherOrb = new BFMatcher(NormTypes.Hamming, false);
-            var matchesOrb = matcherOrb.Match(descriptorsOrb1, descriptorsOrb2);
-            stopwatch.Stop();
-            Console.WriteLine($"ORB: {stopwatch.ElapsedMilliseconds} ms, Matches: {matchesOrb.Length}");
-
-            // AKAZE
-            stopwatch.Restart();
-            var keypointsAkaze1 = akaze.Detect(image1);
-            var keypointsAkaze2 = akaze.Detect(image2);
-            var descriptorsAkaze1 = new Mat();
-            var descriptorsAkaze2 = new Mat();
-            akaze.Compute(image1, ref keypointsAkaze1, descriptorsAkaze1);
-            akaze.Compute(image2, ref keypointsAkaze2, descriptorsAkaze2);
-            var matcherAkaze = new BFMatcher(NormTypes.L2, false);
-            var matchesAkaze = matcherAkaze.Match(descriptorsAkaze1, descriptorsAkaze2);
-            stopwatch.Stop();
-            Console.WriteLine($"AKAZE: {stopwatch.ElapsedMilliseconds} ms, Matches: {matchesAkaze.Length}");
-
-            // BRISK
-            stopwatch.Restart();
-            var keypointsBrisk1 = brisk.Detect(image1);
-            var keypointsBrisk2 = brisk.Detect(image2);
-            var descriptorsBrisk1 = new Mat();
-            var descriptorsBrisk2 = new Mat();
-            brisk.Compute(image1, ref keypointsBrisk1, descriptorsBrisk1);
-            brisk.Compute(image2, ref keypointsBrisk2, descriptorsBrisk2);
-            var matcherBrisk = new BFMatcher(NormTypes.Hamming, false);
-            var matchesBrisk = matcherBrisk.Match(descriptorsBrisk1, descriptorsBrisk2);
-            stopwatch.Stop();
-            Console.WriteLine($"BRISK: {stopwatch.ElapsedMilliseconds} ms, Matches: {matchesBrisk.Length}");
-
-            // Dessiner les correspondances sur l'image (pour la visualisation)
-            Mat resultImage = new Mat();
-            if (keypointsSift1.Length > 0 && keypointsSift2.Length > 0)
-            {
-                Cv2.DrawMatches(image1, keypointsSift1, image2, keypointsSift2, matchesSift, resultImage);
-                Cv2.ImShow("SHITFT Matches", resultImage);
-            }
-
-            Mat resultImage1 = new();
-            if (keypointsSurf1.Length > 0 && keypointsSurf2.Length > 0)
-            {
-                Cv2.DrawMatches(image1, keypointsSurf1, image2, keypointsSurf2, matchesSurf, resultImage1);
-                Cv2.ImShow("SURF Matches", resultImage1);
-            }
-
-            Mat resultImage2 = new();
-            if (keypointsOrb1.Length > 0 && keypointsOrb2.Length > 0)
-            {
-                Cv2.DrawMatches(image1, keypointsOrb1, image2, keypointsOrb2, matchesSurf, resultImage2);
-                Cv2.ImShow("ORB Matches", resultImage2);
-            }
-
-
+            // Show the results for each algorithm
+            ShowResult(image1, image2, sift, "SIFT");
+            ShowResult(image1, image2, surf, "SURF");
+            ShowResult(image1, image2, orb, "ORB");
+            ShowResult(image1, image2, akaze, "AKAZE");
+            ShowResult(image1, image2, brisk, "BRISK");
 
             Cv2.WaitKey(0);
 
             // N'oubliez pas de libérer les ressources
             image1.Release();
             image2.Release();
+        }
+        static void ShowResult(Mat image1, Mat image2, Feature2D detector, string algorithmName)
+        {
+            // Mesurer le temps d'exécution pour le détecteur actuel
+            var stopwatch = new System.Diagnostics.Stopwatch();
+
+            // Detecter les keypoints et calculer les descripteurs
+            stopwatch.Start();
+            var keypoints1 = detector.Detect(image1);
+            var keypoints2 = detector.Detect(image2);
+            var descriptors1 = new Mat();
+            var descriptors2 = new Mat();
+            detector.Compute(image1, ref keypoints1, descriptors1);
+            detector.Compute(image2, ref keypoints2, descriptors2);
+            var matcher = new BFMatcher(NormTypes.L2, false);
+            var matches = matcher.Match(descriptors1, descriptors2);
+            stopwatch.Stop();
+
+            Console.WriteLine($"{algorithmName}: {stopwatch.ElapsedMilliseconds} ms, Matches: {matches.Length}");
+
+            // Dessiner les correspondances sur l'image (pour la visualisation)
+            var resultImage = GetSideBySideImage(image1.Clone(), image2.Clone());
+            Cv2.DrawMatches(image1, keypoints1, image2, keypoints2, matches, resultImage, flags: DrawMatchesFlags.DrawRichKeypoints & DrawMatchesFlags.NotDrawSinglePoints & DrawMatchesFlags.DrawOverOutImg);
+
+            // Afficher le résultat
+            Cv2.ImShow($"{algorithmName} Matches", resultImage);
+
+            // Save result
+            string savePath = $"{PATH_RES}{algorithmName}_result.png";
+            savePath = Path.GetFullPath(savePath);
+            if (!Directory.Exists(PATH_RES))
+            {
+                Directory.CreateDirectory(PATH_RES);
+            }
+            resultImage.SaveImage(savePath);
+            Console.WriteLine($"Save to {savePath} successfully.");
+
+            // N'oubliez pas de libérer les ressources
             resultImage.Release();
+        }
+
+        private static Mat GetSideBySideImage(Mat image1, Mat image2)
+        {
+            // Make sure the images have the same height
+            int maxHeight = Math.Max(image1.Height, image2.Height);
+            Cv2.Resize(image2, image2, new Size(image1.Width, image1.Height));
+
+            // Create a new image with double width
+            Mat result = new Mat(new Size(image1.Width + image2.Width, maxHeight), MatType.CV_8UC3);
+
+            // Copy the first image to the left side of the result image
+            image1.CopyTo(result.SubMat(new Rect(0, 0, image1.Width, maxHeight)));
+
+            // Copy the second image to the right side of the result image
+            image2.CopyTo(result.SubMat(new Rect(image1.Width, 0, image2.Width, maxHeight)));
+
+            return result;
         }
     }
 
