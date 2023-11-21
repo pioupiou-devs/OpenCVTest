@@ -2,7 +2,12 @@
 
 using OpenCVTest;
 
-Benchmarks.Test();
+Mat realImage = Cv2.ImRead(@"Resources\Michelangelo_ThecreationofAdam_1707x775.jpg", ImreadModes.Unchanged);
+List<Fragment> imageList = Utils.ExtractFragments(@"Resources\frag_eroded");
+
+var reconstructedimage = ImageReconstruction.ReconstructImage(realImage, imageList.Select(f => f.GetMat()).ToList());
+
+Cv2.ImShow("Reconstructed image", reconstructedimage);
 
 /*
 Scalar WHITE = new(255, 255, 255);

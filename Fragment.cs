@@ -23,5 +23,10 @@ namespace OpenCVTest
             _angle = angle;
             _image = image;
         }
+
+        public Mat GetMat()
+        {
+            return _image ?? new Mat();
+        }
     }
 }
