@@ -1,135 +1,108 @@
 ﻿using OpenCvSharp;
 
-namespace OpenCVTest
+public class ImageReconstruction
 {
-    public static class ImageReconstruction
+    private readonly Mat _originalImage;
+    private readonly Mat _fragmentImage;
+
+    public ImageReconstruction(string originalImagePath, string fragmentImagePath)
     {
-        private static ORB orb;
+        _originalImage = Cv2.ImRead(originalImagePath);
+        _fragmentImage = Cv2.ImRead(fragmentImagePath);
+    }
 
-        static ImageReconstruction()
+    public void PerformReconstruction()
+    {
+        // Exercice 1: Détection de points d'intérêt et association
+        var keyPointsOriginal = DetectKeyPoints(_originalImage);
+        var keyPointsFragment = DetectKeyPoints(_fragmentImage);
+
+        var descriptorsOriginal = ComputeDescriptors(_originalImage, keyPointsOriginal);
+        var descriptorsFragment = ComputeDescriptors(_fragmentImage, keyPointsFragment);
+
+        var matches = MatchKeyPoints(descriptorsOriginal, descriptorsFragment);
+
+        // Exercice 2: Filtrage des associations par RANSAC
+        var inlierMatches = FilterAssociationsRANSAC(keyPointsOriginal, keyPointsFragment, matches);
+
+        // Exercice 3: Évaluation des résultats
+        EvaluateResults(inlierMatches);
+
+        // Exercice 4: Filtrage des associations par conservation de la distance Euclidienne
+        var euclideanMatches = FilterAssociationsEuclidean(keyPointsOriginal, keyPointsFragment, matches);
+        EvaluateResults(euclideanMatches);
+    }
+
+    private KeyPoint[] DetectKeyPoints(Mat image)
+    {
+        var orb = ORB.Create();
+        return orb.Detect(image);
+    }
+
+    private Mat ComputeDescriptors(Mat image, KeyPoint[] keyPoints)
+    {
+        var orb = ORB.Create();
+        var descriptors = new Mat();
+        orb.Compute(image,ref keyPoints, descriptors);
+        return descriptors;
+    }
+
+    private DMatch[] MatchKeyPoints(Mat descriptors1, Mat descriptors2)
+    {
+        var bfMatcher = new BFMatcher(NormTypes.Hamming);
+        return bfMatcher.Match(descriptors1, descriptors2);
+    }
+
+    private DMatch[] FilterAssociationsRANSAC(KeyPoint[] keyPoints1, KeyPoint[] keyPoints2, DMatch[] matches)
+    {
+        var points1 = Array.ConvertAll(matches, m => keyPoints1[m.QueryIdx].Pt);
+        var points2 = Array.ConvertAll(matches, m => keyPoints2[m.TrainIdx].Pt);
+
+        var homographyMatrix = Cv2.FindHomography(InputArray.Create(points1), InputArray.Create(points2), HomographyMethods.Ransac, 3.0);
+
+        // Utilisez la matrice de transformation pour filtrer les associations
+        var inlierMatches = new List<DMatch>();
+        for (int i = 0; i < matches.Length; i++)
         {
-            // Initialize ORB with default parameters
-            orb = ORB.Create();
-        }
+            var point1 = points1[i];
+            var point2 = points2[i];
 
-        public static Mat ReconstructImage(Mat imageSrc, List<Mat> fragments)
-        {
-            // Perform reconstruction using ORB feature matching
-            List<int[]> bestMatches = FindBestMatches(imageSrc, fragments);
+            var transformedPoint = Cv2.PerspectiveTransform(new[] { point1 }, homographyMatrix);
+            var distance = Cv2.Norm(point2 - transformedPoint[0].ToPoint());
 
-            // Assemble the reconstructed image
-            Mat reconstructedImage = AssembleImage(imageSrc, fragments, bestMatches);
-
-            return reconstructedImage;
-        }
-
-        private static List<int[]> FindBestMatches(Mat imageSrc, List<Mat> fragments)
-        {
-            List<int[]> bestMatches = new List<int[]>();
-
-            // Extract ORB features from the source image
-            KeyPoint[] keypointsSrc;
-            Mat descriptorsSrc = DetectAndComputeORB(imageSrc, out keypointsSrc);
-
-            foreach (var fragment in fragments)
+            if (distance < 3.0) // Choisissez une valeur de seuil appropriée
             {
-                // Extract ORB features from the fragment
-                KeyPoint[] keypointsFragment;
-                Mat descriptorsFragment = DetectAndComputeORB(fragment, out keypointsFragment);
-
-                // Match ORB features between the source image and the fragment
-                DMatch[] matches = MatchORBFeatures(descriptorsSrc, descriptorsFragment);
-
-                // Find the best match based on the number of good matches
-                int[] bestMatch = FindBestMatch(matches, keypointsSrc, keypointsFragment);
-                if (bestMatch != null)
-                {
-                    bestMatch[2] = fragments.IndexOf(fragment); // Save the index of the matched fragment
-                    bestMatches.Add(bestMatch);
-                }
+                inlierMatches.Add(matches[i]);
             }
-
-            return bestMatches;
         }
 
-        private static Mat DetectAndComputeORB(Mat image, out KeyPoint[] keypoints)
+        return inlierMatches.ToArray();
+    }
+
+    private DMatch[] FilterAssociationsEuclidean(KeyPoint[] keyPoints1, KeyPoint[] keyPoints2, DMatch[] matches)
+    {
+        var euclideanMatches = new List<DMatch>();
+        for (int i = 0; i < matches.Length; i++)
         {
-            // Detect and compute ORB features
-            Mat descriptors = new();
-            orb.DetectAndCompute(image, null, out keypoints, descriptors);
-            return descriptors;
-        }
+            var point1 = keyPoints1[matches[i].QueryIdx].Pt;
+            var point2 = keyPoints2[matches[i].TrainIdx].Pt;
 
-        private static DMatch[] MatchORBFeatures(Mat descriptorsSrc, Mat descriptorsFragment)
-        {
-            // Match ORB features between the source image and the fragment
-            BFMatcher matcher = new BFMatcher(NormTypes.Hamming, true);
-            DMatch[] matches = matcher.Match(descriptorsSrc, descriptorsFragment);
+            var distance = Cv2.Norm(point1 - point2);
 
-            return matches;
-        }
-
-        private static int[] FindBestMatch(DMatch[] matches, KeyPoint[] keypointsSrc, KeyPoint[] keypointsFragment)
-        {
-            // Set a distance threshold for considering a match as good
-            double distanceThreshold = 50.0; // Adjust this threshold based on your specific case
-
-            // Filter out matches based on the distance threshold
-            var goodMatches = matches.Where(m => m.Distance < distanceThreshold).ToList();
-
-            // If there are enough good matches, consider it a valid match
-            if (goodMatches.Count >= 3)
+            if (distance < 50.0) // Choisissez une valeur de seuil appropriée
             {
-                // Get the coordinates of the matched keypoints in the source and fragment
-                List<Point2f> srcPoints = goodMatches.Select(m => keypointsSrc[m.QueryIdx].Pt).ToList();
-                List<Point2f> fragmentPoints = goodMatches.Select(m => keypointsFragment[m.TrainIdx].Pt).ToList();
-
-                // Convert the List<Point2f> to Mat
-                Mat srcMat = new Mat(srcPoints.Count, 2, MatType.CV_32F, srcPoints.SelectMany(p => new float[] { p.X, p.Y }).ToArray());
-                Mat fragmentMat = new Mat(fragmentPoints.Count, 2, MatType.CV_32F, fragmentPoints.SelectMany(p => new float[] { p.X, p.Y }).ToArray());
-
-                // Calculate the transformation matrix using the matched keypoints
-                Mat homography = Cv2.FindHomography(srcMat, fragmentMat, HomographyMethods.Ransac);
-
-                // Check if the homography matrix is valid
-                if (!homography.Empty())
-                {
-                    // Extract translation and rotation information from the homography matrix
-                    double tx = homography.At<double>(0, 2);
-                    double ty = homography.At<double>(1, 2);
-                    double theta = Math.Atan2(homography.At<double>(1, 0), homography.At<double>(0, 0)) * (180 / Math.PI);
-
-                    // Return the matched position and rotation information
-                    return new int[] { (int)ty, (int)tx, -(int)theta }; // Negate the rotation angle as it might be in the opposite direction
-                }
+                euclideanMatches.Add(matches[i]);
             }
-
-            // If no valid match is found, return null
-            return null;
         }
 
+        return euclideanMatches.ToArray();
+    }
 
-        private static Mat AssembleImage(Mat imageSrc, List<Mat> fragments, List<int[]> bestMatches)
-        {
-            // Create a blank canvas to assemble the image
-            Mat reconstructedImage = Mat.Zeros(imageSrc.Rows, imageSrc.Cols, imageSrc.Type());
-
-            foreach (var match in bestMatches)
-            {
-                // Paste each fragment onto the reconstructed image at its best-matched position
-                int row = match[0];
-                int col = match[1];
-                PasteFragment(reconstructedImage, fragments[match[2]], row, col);
-            }
-
-            return reconstructedImage;
-        }
-
-        private static void PasteFragment(Mat image, Mat fragment, int row, int col)
-        {
-            // Paste the fragment onto the image at the specified position
-            Mat roi = new Mat(image, new Rect(col, row, fragment.Cols, fragment.Rows));
-            fragment.CopyTo(roi);
-        }
+    private void EvaluateResults(DMatch[] matches)
+    {
+        var inlierImage = new Mat();
+        Cv2.DrawMatches(_originalImage, keyPointsOriginal, _fragmentImage, keyPointsFragment, matches, inlierImage);
+        Cv2.ImShow("Inlier Matches", inlierImage);
+        Cv2.WaitKey(0);
     }
 }
