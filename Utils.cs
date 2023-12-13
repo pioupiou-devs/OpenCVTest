@@ -26,10 +26,18 @@ namespace OpenCVTest
         /// <param name="folderPath">Path to the folder or file depending of isText</param>
         /// <param name="isText">define if is a text file or a folder of png files</param>
         /// <returns>list of fragments potentially not completed</returns>
-        public static List<Fragment> ExtractFragments(string folderPath, bool isText = false) =>
-            isText ?
+        public static List<Fragment> ExtractFragments(string folderPath, bool isText = false, bool notNullOnly = false)
+        {
+            List<Fragment> fragments =
+                isText ?
             ExtractFromTextFile(folderPath) :
             ExtractFromPngFile(folderPath);
+
+            if (notNullOnly)
+                fragments.RemoveAll(f => f.Image is null);
+
+            return fragments;
+        }
 
         private static List<Fragment> ExtractFromTextFile(string folderPath)
         {
@@ -81,7 +89,8 @@ namespace OpenCVTest
             OpenCvSharp.Size size = Cv2.ImRead(filepath, ImreadModes.Unchanged).Size();
             return new Tuple<int, int>(size.Width, size.Height);
         }
-     
+
+        public static void PrintImage(Mat image) => PrintImage($"{nameof(image)} :", image);
         public static void PrintImage(string name, Mat image)
         {
             try
@@ -96,6 +105,7 @@ namespace OpenCVTest
             }
         }
 
+        public static void PrintMat(Mat mat) => PrintMat($"{nameof(mat)} : ", mat);
         public static void PrintMat(string name, Mat mat)
         {
             try
