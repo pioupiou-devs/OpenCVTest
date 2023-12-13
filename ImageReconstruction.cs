@@ -44,15 +44,18 @@ public class ImageReconstruction
         // Extract the matched keypoints
         ExtractMatchedKeyPointsInList(intrestingFragment, srcKeyPoints);
 
-        // Find homography for each fragment (to cut in methods)
-        foreach (var fragment in fragments)
-        {
-            Console.WriteLine($"frag n°{fragment.Number} => {fragment.MatchedKeyPoints.FirstOrDefault()}");
-            Point2f src = fragment.MatchedKeyPoints[0].Item1; // TODO : Double check the extract matched keypoint because the [0] doesn't exist
-            Point2f dest = fragment.MatchedKeyPoints[0].Item2;
 
-            Mat matchedPoints1 = new(1, 1, MatType.CV_32FC2, new[] { src.X, src.Y });
-            Mat matchedPoints2 = new(1, 1, MatType.CV_32FC2, new[] { dest.X, dest.Y });
+        // Find homography for each fragment (to cut in methods)
+        foreach (var fragment in intrestingFragment)
+        {
+            Console.WriteLine($"frag n°{fragment.Number} => {fragment.MatchedKeyPoints.Count}");
+            Point2f src = fragment.MatchedKeyPoints[0].Item1;
+            Point2f dest = fragment.MatchedKeyPoints[0].Item2;
+            Point2f src2 = fragment.MatchedKeyPoints[1].Item1;
+            Point2f dest2 = fragment.MatchedKeyPoints[1].Item2;
+
+            Mat matchedPoints1 = new(1, 1, MatType.CV_32FC2, new[] { src.X, src.Y, src2.X, src2.Y });
+            Mat matchedPoints2 = new(1, 1, MatType.CV_32FC2, new[] { dest.X, dest.Y, dest2.X, dest2.Y });
 
             // Find homography using RANSAC
             Mat homographyMatrix = Cv2.FindHomography(matchedPoints1, matchedPoints2, HomographyMethods.Ransac, ransacReprojThreshold: 3.0);
