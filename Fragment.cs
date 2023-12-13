@@ -16,6 +16,8 @@ namespace OpenCVTest
 
         public List<KeyPoint> KeyPoints { get; set; } = new List<KeyPoint>();
         public Mat? Descriptor { get; set; } = null;
+        public DMatch[]? MatchToSrcImage { get; set; } = null;
+        public List<(Point2f, Point2f)> MatchedKeyPoints { get; set; } = new List<(Point2f, Point2f)>();
 
         public Fragment(int number, float x = 0.0f, float y = 0.0f, float angle = 0.0f, Mat image = null)
         {

@@ -1,23 +1,31 @@
-﻿using OpenCvSharp;
+﻿using System.Collections.Generic;
+using System.Xml.Serialization;
+
+using OpenCvSharp;
 
 namespace OpenCVTest;
 
 public class ImageReconstruction
 {
-    private ORB orb;
-    private DescriptorMatcher matcher;
+    private ORB _orb;
+    private DescriptorMatcher _matcher;
+    private int _minMatches = 5;
 
+    public ImageReconstruction(int minMatches) : this()
+    {
+        _minMatches = minMatches;
+    }
     public ImageReconstruction()
     {
         // Initialize ORB with default parameters
-        orb = ORB.Create();
-        matcher = DescriptorMatcher.Create("BruteForce-Hamming");
+        _orb = ORB.Create();
+        _matcher = DescriptorMatcher.Create("BruteForce-Hamming");
     }
 
     public Mat ReconstructImage(Mat imageSrc, List<Fragment> fragments)
     {
         // Detect the keypoints in fragments
-        DetectKeyPointsInList(ref fragments);
+        DetectKeyPointsInList(fragments);
 
         // Detect the keypoints in the source image
         List<KeyPoint> srcKeyPoints = DetectKeyPoints(imageSrc);
@@ -26,43 +34,76 @@ public class ImageReconstruction
         ComputeDescriptorInList(fragments);
         Mat srcDescriptor = ComputeDescriptor(imageSrc, srcKeyPoints.ToArray());
 
-        Fragment fragTest = fragments[24];
+        // Compute the Matches
+        GetMatchesInList(fragments, srcDescriptor);
 
-        DMatch[] temp = GetMatches(fragTest.Descriptor, srcDescriptor);
+        // Remove not instresting fragments
+        List<Fragment> intrestingFragment = fragments
+            .Where(f => f.MatchToSrcImage.Length >= _minMatches).ToList();
 
-        Mat output = new();
-        Cv2.DrawMatches(fragTest.Image, fragTest.KeyPoints, imageSrc, srcKeyPoints, temp, output);
+        // Extract the matched keypoints
+        ExtractMatchedKeyPointsInList(intrestingFragment, srcKeyPoints);
 
-        Utils.PrintImage(output);
-        Cv2.WaitKey(0);
+        // Find homography for each fragment (to cut in methods)
+        foreach (var fragment in fragments)
+        {
+            Console.WriteLine($"frag n°{fragment.Number} => {fragment.MatchedKeyPoints.FirstOrDefault()}");
+            Point2f src = fragment.MatchedKeyPoints[0].Item1; // TODO : Double check the extract matched keypoint because the [0] doesn't exist
+            Point2f dest = fragment.MatchedKeyPoints[0].Item2;
 
-        // Combine with RANSAC method
-        //Mat combineRes = FindHomography(fragments[0].Descriptor, srcDescriptor);
+            Mat matchedPoints1 = new(1, 1, MatType.CV_32FC2, new[] { src.X, src.Y });
+            Mat matchedPoints2 = new(1, 1, MatType.CV_32FC2, new[] { dest.X, dest.Y });
 
-        //Utils.PrintImage(combineRes);
-        //Cv2.WaitKey(0);
+            // Find homography using RANSAC
+            Mat homographyMatrix = Cv2.FindHomography(matchedPoints1, matchedPoints2, HomographyMethods.Ransac, ransacReprojThreshold: 3.0);
 
-        return null;
+            // Warp the fragment image to align with the source image
+            Mat warpedFragment = new Mat();
+            Cv2.WarpPerspective(fragment.Image, warpedFragment, homographyMatrix, imageSrc.Size());
+
+            // Optionally, you can blend or stitch the warped fragments into a single image
+            // For example, using a simple averaging method:
+            Cv2.AddWeighted(imageSrc, 0.5, warpedFragment, 0.5, 0, imageSrc);
+
+            Utils.PrintImage(imageSrc);
+            Cv2.WaitKey(0);
+        }
+
+        // At this point, the imageSrc contains the reconstructed image with fragments aligned
+
+        return imageSrc;
     }
 
-    private DMatch[] GetMatches(Mat fragmentDescriptor, Mat srcDescriptor) => matcher
-                    .Match(fragmentDescriptor, srcDescriptor)
-                    .OrderBy(t => t.Distance).ToArray();
-
-    private Mat FindHomography(Mat descriptor1, Mat descriptor2)
+    #region Matched Keypoints
+    private void ExtractMatchedKeyPointsInList(List<Fragment> fragments, List<KeyPoint> srcKeypoints) =>
+        fragments
+            .AsParallel()
+            .ForAll(f => ExtractMatchedKeyPointsForFragment(f, srcKeypoints));
+    private void ExtractMatchedKeyPointsForFragment(Fragment fragment, List<KeyPoint> srcKeypoints)
     {
-        return Cv2.FindHomography(descriptor1, descriptor2, HomographyMethods.Ransac);
+        List<(Point2f, Point2f)> temp = fragment.MatchToSrcImage
+            .AsParallel()
+            .Select(m => ExtractMatchedKeyPoints(m, fragment.KeyPoints, srcKeypoints)).ToList();
+
+        fragment.MatchedKeyPoints.AddRange(temp);
     }
 
+    private (Point2f, Point2f) ExtractMatchedKeyPoints(DMatch match, List<KeyPoint> keypoints, List<KeyPoint> srcKeypoints)
+    {
+        Point2f src = keypoints[match.QueryIdx].Pt;
+        Point2f dest = srcKeypoints[match.TrainIdx].Pt;
+        return (src, dest);
+    }
+    #endregion
 
     #region KeyPoints
 
-    private void DetectKeyPointsInList(ref List<Fragment> fragments) =>
+    private void DetectKeyPointsInList(List<Fragment> fragments) =>
         fragments
             .AsParallel()
             .ForAll(f => f.KeyPoints = DetectKeyPoints(f.Image));
 
-    private List<KeyPoint> DetectKeyPoints(Mat image) => orb.Detect(image)?.ToList();
+    private List<KeyPoint> DetectKeyPoints(Mat image) => _orb.Detect(image)?.ToList();
     #endregion
 
     #region Descriptors
@@ -75,10 +116,20 @@ public class ImageReconstruction
     private Mat ComputeDescriptor(Mat imageSrc, KeyPoint[] keypoints)
     {
         Mat output = new();
-        orb.Compute(imageSrc, ref keypoints, output);
+        _orb.Compute(imageSrc, ref keypoints, output);
         return output;
     }
 
 
+    #endregion
+
+    #region Matches
+    private void GetMatchesInList(List<Fragment> fragments, Mat srcDescriptor) =>
+fragments
+    .AsParallel()
+    .ForAll(f => f.MatchToSrcImage = GetMatches(f.Descriptor, srcDescriptor));
+    private DMatch[] GetMatches(Mat fragmentDescriptor, Mat srcDescriptor) => _matcher
+                    .Match(fragmentDescriptor, srcDescriptor)
+                    .OrderBy(t => t.Distance).ToArray();
     #endregion
 }
