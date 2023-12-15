@@ -44,31 +44,28 @@ public class ImageReconstruction
         // Extract the matched keypoints
         ExtractMatchedKeyPointsInList(intrestingFragment, srcKeyPoints);
 
-
         // Find homography for each fragment (to cut in methods)
         foreach (var fragment in intrestingFragment)
         {
             Console.WriteLine($"frag n°{fragment.Number} => {fragment.MatchedKeyPoints.Count}");
-            Point2f src = fragment.MatchedKeyPoints[0].Item1;
-            Point2f dest = fragment.MatchedKeyPoints[0].Item2;
-            Point2f src2 = fragment.MatchedKeyPoints[1].Item1;
-            Point2f dest2 = fragment.MatchedKeyPoints[1].Item2;
 
-            Mat matchedPoints1 = new(1, 1, MatType.CV_32FC2, new[] { src.X, src.Y, src2.X, src2.Y });
-            Mat matchedPoints2 = new(1, 1, MatType.CV_32FC2, new[] { dest.X, dest.Y, dest2.X, dest2.Y });
+            List<Point2d> src = new();
+            List<Point2d> dest = new();
+
+            // Add all matched keypoints of the fragment to the source and destination Mat
+            foreach (var matchedKeyPoint in fragment.MatchedKeyPoints)
+            {
+                src.Add(matchedKeyPoint.Item1);
+                dest.Add(matchedKeyPoint.Item2);
+            }
+
+            Point2d[] srcArray = src.ToArray();
+            Point2d[] destArray = dest.ToArray();
 
             // Find homography using RANSAC
-            Mat homographyMatrix = Cv2.FindHomography(matchedPoints1, matchedPoints2, HomographyMethods.Ransac, ransacReprojThreshold: 3.0);
+            Mat homographyMatrix = Cv2.FindHomography(srcArray, destArray, HomographyMethods.Ransac);
 
-            // Warp the fragment image to align with the source image
-            Mat warpedFragment = new Mat();
-            Cv2.WarpPerspective(fragment.Image, warpedFragment, homographyMatrix, imageSrc.Size());
-
-            // Optionally, you can blend or stitch the warped fragments into a single image
-            // For example, using a simple averaging method:
-            Cv2.AddWeighted(imageSrc, 0.5, warpedFragment, 0.5, 0, imageSrc);
-
-            Utils.PrintImage(imageSrc);
+            Utils.PrintImage(homographyMatrix);
             Cv2.WaitKey(0);
         }
 
@@ -84,17 +81,19 @@ public class ImageReconstruction
             .ForAll(f => ExtractMatchedKeyPointsForFragment(f, srcKeypoints));
     private void ExtractMatchedKeyPointsForFragment(Fragment fragment, List<KeyPoint> srcKeypoints)
     {
-        List<(Point2f, Point2f)> temp = fragment.MatchToSrcImage
+        List<(Point2d, Point2d)> temp = fragment.MatchToSrcImage
             .AsParallel()
             .Select(m => ExtractMatchedKeyPoints(m, fragment.KeyPoints, srcKeypoints)).ToList();
 
         fragment.MatchedKeyPoints.AddRange(temp);
     }
 
-    private (Point2f, Point2f) ExtractMatchedKeyPoints(DMatch match, List<KeyPoint> keypoints, List<KeyPoint> srcKeypoints)
+    private (Point2d, Point2d) ExtractMatchedKeyPoints(DMatch match, List<KeyPoint> keypoints, List<KeyPoint> srcKeypoints)
     {
-        Point2f src = keypoints[match.QueryIdx].Pt;
-        Point2f dest = srcKeypoints[match.TrainIdx].Pt;
+        Point2f srcF = keypoints[match.QueryIdx].Pt;
+        Point2d src = new(srcF.X, srcF.Y);
+        Point2f destF = srcKeypoints[match.TrainIdx].Pt;
+        Point2d dest = new(destF.X, destF.Y);
         return (src, dest);
     }
     #endregion
@@ -128,11 +127,12 @@ public class ImageReconstruction
 
     #region Matches
     private void GetMatchesInList(List<Fragment> fragments, Mat srcDescriptor) =>
-fragments
-    .AsParallel()
-    .ForAll(f => f.MatchToSrcImage = GetMatches(f.Descriptor, srcDescriptor));
-    private DMatch[] GetMatches(Mat fragmentDescriptor, Mat srcDescriptor) => _matcher
-                    .Match(fragmentDescriptor, srcDescriptor)
-                    .OrderBy(t => t.Distance).ToArray();
+        fragments
+            .AsParallel()
+            .ForAll(f => f.MatchToSrcImage = GetMatches(f.Descriptor, srcDescriptor));
+    private DMatch[] GetMatches(Mat fragmentDescriptor, Mat srcDescriptor) => 
+        _matcher
+            .Match(fragmentDescriptor, srcDescriptor)
+            .OrderBy(t => t.Distance).ToArray();
     #endregion
 }
