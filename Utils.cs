@@ -118,7 +118,7 @@ namespace OpenCVTest
                     {
                         var pixel = mat.At<byte>(i, j);
 
-                        if (pixel > 0)
+                        if (pixel >= 0)
                         {
                             txt += pixel + " ";
                         }
