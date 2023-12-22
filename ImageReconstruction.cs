@@ -44,7 +44,8 @@ public class ImageReconstruction
         // Extract the matched keypoints
         ExtractMatchedKeyPointsInList(intrestingFragment, srcKeyPoints);
 
-        Mat reconstructedImage = new(new Size(imageSrc.Width, imageSrc.Height),imageSrc.Type());
+        int deltaW = 200, deltaH = 200, deltaX = 200, deltaY = 200;
+        Mat reconstructedImage = new(new Size(imageSrc.Width + (deltaY + deltaH), imageSrc.Height + (deltaX + deltaW)), imageSrc.Type());
 
         // Find homography for each fragment (to cut in methods)
         foreach (var fragment in intrestingFragment)
@@ -68,54 +69,98 @@ public class ImageReconstruction
             Mat homographyMatrix = Cv2.FindHomography(srcArray, destArray, HomographyMethods.Ransac);
 
             // Decompose homography matrix
-            Mat[] rotations = Array.Empty<Mat>(), translations = Array.Empty<Mat>(), normals = Array.Empty<Mat>();
             Mat cameraCalibration = Mat.Eye(3, 3, MatType.CV_64FC1);
-            Cv2.DecomposeHomographyMat(homographyMatrix, cameraCalibration, out rotations, out translations, out normals);
+            Cv2.DecomposeHomographyMat(homographyMatrix, cameraCalibration, out var rotations, out var translations, out _);
 
-            // Extract rotation angles (in radians) from the rotation matrix
-            Mat rotationMatrix = new();
-            Cv2.Rodrigues(rotations[0], rotationMatrix);
+            #region checks
+            // Check translations
+            Console.WriteLine("Translations: ");
+            foreach (var t in translations)
+            {
+                Utils.PrintMat("t", t);
+                Console.WriteLine();
+            }
 
-            // Convert the 3x1 matrix to a 3x3 rotation matrix
-            Mat rotMatrix = Mat.Zeros(3,3, MatType.CV_64FC1);
-            rotMatrix.Set<double>(0, 0, rotationMatrix.At<double>(0, 0));
-            rotMatrix.Set<double>(0, 1, rotationMatrix.At<double>(0, 1));
-            rotMatrix.Set<double>(1, 0, rotationMatrix.At<double>(1, 0));
-            rotMatrix.Set<double>(1, 1, rotationMatrix.At<double>(1, 1));
-            rotMatrix.Set<double>(2, 2, 1.0);
+            Console.WriteLine("------------------------------------------------------------------------------------");
+
+            // Check rotations
+            Console.WriteLine("Rotations: ");
+            foreach (var r in rotations)
+            {
+                Utils.PrintMat("r", r);
+                Console.WriteLine();
+            }
+
+            Console.WriteLine("------------------------------------------------------------------------------------");
+            #endregion checks
+
+            double[] rotationAngles = new double[3];
+            for (int i = 0; i < 3; i++)
+            {
+                var rotMat = rotations[i].RowRange(0, 3).ColRange(0, 3);
+                rotationAngles[i] = Math.Atan2(rotMat.At<double>(1, 0), rotMat.At<double>(0, 0));
+            }
+
+            // Output rotation angles
+            Console.WriteLine("Rotation Angles (in radians):");
+            Console.WriteLine($"Rotation 0: {rotationAngles[0]}");
+            Console.WriteLine($"Rotation 1: {rotationAngles[1]}");
+            Console.WriteLine($"Rotation 2: {rotationAngles[2]}");
+
+            // Output translation vectors
+            Console.WriteLine("Translation Vectors:");
+            Console.WriteLine($"Tx0: {translations[0].At<double>(0)}");
+            Console.WriteLine($"Ty0: {translations[0].At<double>(1)}");
+            Console.WriteLine($"Tx1: {translations[1].At<double>(0)}");
+            Console.WriteLine($"Ty1: {translations[1].At<double>(1)}");
+            Console.WriteLine($"Tx2: {translations[2].At<double>(0)}");
+            Console.WriteLine($"Ty2: {translations[2].At<double>(1)}");
 
 
-            // Rotate the fragment image
-            Mat fragImage = fragment.Image;
-            Mat rotatedFragment = new(fragImage.Size(), fragImage.Type());
-            float width = fragImage.Width;
-            float height = fragImage.Height;
 
-            Utils.PrintMat("convertedRotationMatrix", rotMatrix);
-            Utils.PrintImage("rotated fragment", rotatedFragment);
-            Utils.PrintImage("fragment", fragImage);
+            Mat? image = fragment.Image;
+            Mat translated = image?.Clone();
+
+            int pointIndex = 2;
+            float tetha = (float)rotationAngles[pointIndex]; //fragment.Angle; // TODO calc ?
+            float tx = translations[pointIndex].At<float>(0);//fragment.X; // TODO calc ?
+            float ty = translations[pointIndex].At<float>(1);//fragment.Y; // TODO calc ?
+
+            // Rotate and translate image
+            Mat rotationMatrix = Cv2.GetRotationMatrix2D(new Point2f(image.Width / 2, image.Height / 2), tetha, 1.0);
+            Cv2.WarpAffine(image, translated, rotationMatrix, image.Size());
+
+            Utils.PrintImage("image", image);
+            Utils.PrintImage("translated", translated);
+
+            // Get the alpha channel from translated
+            Mat alpha = new();
+            Cv2.ExtractChannel(translated, alpha, 3);
+
+            // Calculate the window
+            Rect window = new(
+                new Point((tx - (translated.Width / 2)) + deltaX, (ty - (translated.Height / 2)) + deltaY),
+                new Size(translated.Width, translated.Height));
+            var temp = null as Mat;
+            try
+            {
+                // Apply translated with alpha channel to background
+                temp = reconstructedImage[window];
+                Utils.PrintImage("reconstructedImage", reconstructedImage);
+                Utils.PrintImage("temp", temp);
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine($"error : {e.Message}, when working on fragment {fragment.Number}");
+                continue;
+            }
+            translated.CopyTo(temp, alpha);
+
+            Utils.PrintImage("translated2", translated);
+            Utils.PrintImage("reconstructedImage2", reconstructedImage);
             Cv2.WaitKey(0);
 
-            Cv2.WarpPerspective(fragImage, rotatedFragment, rotMatrix, fragImage.Size());
-
-            // Translate the fragment image
-            Mat affineTransform = Cv2.GetAffineTransform(
-                new Point2f[] { new Point2f(0, 0), new Point2f(width, 0), new Point2f(0, height) },
-                new Point2f[] { new Point2f(GetElement(translations,0), GetElement(translations,1)),
-                new Point2f(width + GetElement(translations,0), GetElement(translations,1)),
-                new Point2f(GetElement(translations,0), height + GetElement(translations,1)) });
-
-            Mat translatedFragment = new();
-            Cv2.WarpAffine(rotatedFragment, translatedFragment, affineTransform, new Size(width, height));
-
-            // Add the translated fragment to the reconstructed image
-            Cv2.Add(reconstructedImage, translatedFragment, reconstructedImage);
-
-            // Draw the fragment on the reconstructed image
-            Cv2.DrawContours(reconstructedImage, new Mat[] { translatedFragment }, 0, Scalar.Red, 2);
-
-            Utils.PrintImage(reconstructedImage);
-            Cv2.WaitKey(0);
         }
 
         // At this point, the imageSrc contains the reconstructed image with fragments aligned
